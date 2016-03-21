@@ -1,0 +1,272 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>Experiment</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+  <script src="jspsych-5.0.3/jspsych.js"></script>
+  <script src="jspsych-flashcard.js"></script>
+  <script src="jspsych-video.js"></script>
+  <script src="jspsych-5.0.3/plugins/jspsych-survey-text.js"></script>
+  <script src="jspsych-5.0.3/plugins/jspsych-single-stim.js"></script>
+  <script src="jspsych-5.0.3/plugins/jspsych-call-function.js"></script>
+  <script src="jspsych-5.0.3/plugins/jspsych-instructions.js"></script>
+  <script src="word-info.js"></script>
+  <script src="sis.js"></script>
+  <link href="jspsych-5.0.3/css/jspsych.css" rel="stylesheet"></link>
+  <style>
+  h1 { font-size: 1.5em; }
+  .jspsych-display-element { width: 1280px; }
+  </style>
+</head>
+
+<body>
+  <div id="jspsych-target"></div>
+</body>
+<script>
+
+  // parameters
+  var practice_trials_per_word = 4;
+  var video_width = 640;
+  var video_height = 360;
+
+  // condition assignment
+  var subjectID = prompt('Please enter the subject ID');
+  var condition = subjectID % 4;
+  var enthusiasm_condition;
+  var memory_condition;
+  if(condition == 0){
+    enthusiasm_condition = 'enthused';
+    memory_condition = 'massed';
+  } else if(condition == 1) {
+    enthusiasm_condition = 'neutral';
+    memory_condition = 'massed';
+  } else if(condition == 2) {
+    enthusiasm_condition = 'enthused';
+    memory_condition = 'spaced';
+  } else if(condition == 3) {
+    enthusiasm_condition = 'neutral';
+    memory_condition = 'spaced';
+  }
+
+  jsPsych.data.addProperties({subject_id: subjectID, memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
+
+  // create the practice order
+  var random_word_order = jsPsych.randomization.shuffle(word_pairs);
+
+  var flashcards = [];
+  if(memory_condition == 'massed'){
+    for(var w = 0; w < random_word_order.length; w++){
+      for (var i = 0; i < practice_trials_per_word; i++) {
+        flashcards.push({
+          front: random_word_order[w][1],
+          back: random_word_order[w][0],
+          data: {word_appearance_count: i}
+        });
+      }
+    }
+  } else if(memory_condition == 'spaced'){
+    for (var i = 0; i < practice_trials_per_word; i++) {
+      for(var w = 0; w < random_word_order.length; w++){
+        flashcards.push({
+          front: random_word_order[w][1],
+          back: random_word_order[w][0],
+          data: {word_appearance_count: i}
+        });
+      }
+    }
+  }
+
+  var first_half_flashcards = flashcards.splice(0,Math.ceil(flashcards.length / 2));
+  var second_half_flashcards = flashcards;
+
+  // create a list of the videos
+  var instructor_videos = [];
+  if(enthusiasm_condition == 'enthused'){
+    instructor_videos.push(
+      'video/ENRICHED_01_Welcome.mp4',
+      'video/ENRICHED_02_ProcedureDetails.mp4',
+      'video/ENRICHED_03_Indonesian.mp4',
+      'video/ENRICHED_04_Halfway.mp4',
+      'video/ENRICHED_05_MoreQuestions.mp4',
+      'video/ENRICHED_06_ConfirmAppointment.mp4'
+    )
+  } else {
+    instructor_videos.push(
+      'video/NEUTRAL_01_Welcome.mp4',
+      'video/NEUTRAL_02_ProcedureDetails.mp4',
+      'video/NEUTRAL_03_Indonesian.mp4',
+      'video/NEUTRAL_04_Halfway.mp4',
+      'video/NEUTRAL_05_MoreQuestions.mp4',
+      'video/NEUTRAL_06_ConfirmAppointment.mp4'
+    )
+  }
+
+  var timeline = [];
+
+  timeline.push({
+    type: 'instructions',
+    pages: [sis_string],
+    allow_keys: false,
+    show_clickable_nav: true
+  });
+
+  timeline.push({
+    type: 'video',
+    autoplay: true,
+    controls: false,
+    width: video_width,
+    height: video_height,
+    sources:[instructor_videos[0]],
+    timing_post_trial: 0,
+    center_vertical: true
+  });
+
+  timeline.push({
+    type: 'single-stim',
+    choices: ['enter'],
+    stimulus: '<div style="position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center"><p class="center-content">Press the enter key to continue.</p></div>',
+    is_html: true
+  });
+
+  timeline.push({
+    type: 'video',
+    autoplay: true,
+    controls: false,
+    width: video_width,
+    height: video_height,
+    sources:[instructor_videos[1]],
+    timing_post_trial: 0,
+    center_vertical: true
+  });
+
+  timeline.push({
+    type: 'single-stim',
+    choices: ['enter'],
+    stimulus: '<div style="position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center"><p class="center-content">Press the enter key to continue.</p></div>',
+    is_html: true
+  });
+
+  timeline.push({
+    type: 'video',
+    autoplay: true,
+    controls: false,
+    width: video_width,
+    height: video_height,
+    sources:[instructor_videos[2]],
+    timing_post_trial: 0,
+    center_vertical: true
+  });
+
+  timeline.push({
+    type: 'single-stim',
+    choices: ['enter'],
+    stimulus: '<div style="position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center"><p class="center-content">Press the enter key to continue.</p></div>',
+    is_html: true
+  });
+
+  var completed_cards = 0;
+
+  timeline.push({
+    type: 'flashcard',
+    timing_post_trial: 200,
+    minimum_flips: 1,
+    maximum_flips: 1,
+    prompt: function(){
+      completed_cards++;
+      return '<p class="block-center center-content">Card '+ completed_cards + ' of ' + (random_word_order.length*practice_trials_per_word) + '</p>';
+    },
+    timeline: first_half_flashcards
+  });
+
+  timeline.push({
+    type: 'video',
+    autoplay: true,
+    controls: false,
+    width: video_width,
+    height: video_height,
+    sources:[instructor_videos[3]],
+    timing_post_trial: 0,
+    center_vertical: true
+  });
+
+  timeline.push({
+    type: 'single-stim',
+    choices: ['enter'],
+    stimulus: '<div style="position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center"><p class="center-content">Press the enter key to continue.</p></div>',
+    is_html: true
+  });
+
+  timeline.push({
+    type: 'flashcard',
+    timing_post_trial: 200,
+    minimum_flips: 1,
+    maximum_flips: 1,
+    prompt: function(){
+      completed_cards++;
+      return '<p class="block-center center-content">Card '+ completed_cards + ' of ' + (random_word_order.length*practice_trials_per_word) + '</p>';
+    },
+    timeline: second_half_flashcards
+  });
+
+  timeline.push({
+    type: 'video',
+    autoplay: true,
+    controls: false,
+    width: video_width,
+    height: video_height,
+    sources:[instructor_videos[4]],
+    timing_post_trial: 0,
+    center_vertical: true
+  });
+
+
+  timeline.push({
+    type: 'survey-text',
+    questions: ['How old are you? (e.g., 18, 19, 20)', 'What is your gender?', 'Including this semester, how many semesters of college have you completed? (e.g., 1, 2, 3)']
+  });
+
+  timeline.push({
+    type: 'call-function',
+    func: save_data,
+    timing_post_trial: 0
+  });
+
+  function save_data() {
+    var data = jsPsych.data.getData();
+
+    $.ajax({
+      type: 'post',
+      cache: false,
+      url: '../common/submit_data_mysql_v4plus.php',
+      data: {
+        "table": "instructor_mediation_exp_1_study",
+        "json": JSON.stringify(data)
+      },
+      success: function(data2) {
+        console.log(data2);
+      }
+    });
+  }
+
+  timeline.push({
+    type: 'video',
+    autoplay: true,
+    controls: false,
+    width: video_width,
+    height: video_height,
+    sources:[instructor_videos[5]],
+    timing_post_trial: 0,
+    center_vertical: true
+  });
+
+  jsPsych.init({
+    display_element: $('#jspsych-target'),
+    timeline: timeline,
+    on_finish: function() {
+      //jsPsych.data.displayData();
+    }
+  });
+</script>
+
+</html>
