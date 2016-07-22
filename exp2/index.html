@@ -4,19 +4,19 @@
 <head>
   <title>Experiment</title>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
-  <script src="jspsych-5.0.3/jspsych.js"></script>
+  <script src="jspsych-6.0-pre/jspsych.js"></script>
   <script src="jspsych-flashcard.js"></script>
   <script src="jspsych-video.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-survey-text.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-single-stim.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-call-function.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-instructions.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-survey-text.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-single-stim.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-call-function.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-instructions.js"></script>
   <script src="word-info.js"></script>
   <script src="sis.js"></script>
-  <link href="jspsych-5.0.3/css/jspsych.css" rel="stylesheet"></link>
+  <link href="jspsych-6.0-pre/css/jspsych.css" rel="stylesheet"></link>
   <style>
   h1 { font-size: 1.5em; }
-  .jspsych-display-element { width: 1280px; }
+  .jspsych-content { width: 1000px; }
   </style>
 </head>
 
@@ -35,41 +35,47 @@
 
   // get prolific ID
   var subjectID = jsPsych.data.getURLVariable('prolific_pid');
+  var memory_condition;
+  var enthusiasm_condition;
 
   // assign condition
   // script sends ID to server, assigns condition, records in database, and returns assignment
-  var condition = subjectID % 4;
-  var enthusiasm_condition;
-  var memory_condition;
-  if(condition == 0){
-    enthusiasm_condition = 'enthused';
-    memory_condition = 'massed';
-  } else if(condition == 1) {
-    enthusiasm_condition = 'neutral';
-    memory_condition = 'massed';
-  } else if(condition == 2) {
-    enthusiasm_condition = 'enthused';
-    memory_condition = 'spaced';
-  } else if(condition == 3) {
-    enthusiasm_condition = 'neutral';
-    memory_condition = 'spaced';
-  }
+  $.ajax({
+    type: 'post',
+    cache: false,
+    url: 'php/add_new_subject.php',
+    data: {
+      "prolific_pid": subjectID
+    },
+    success: function(datajson) {
+      var result = JSON.parse(datajson)
+      memory_condition = result.memory_condition;
+      enthusiasm_condition = result.enthusiasm_condition;
+      jsPsych.data.addProperties({subject_id: subjectID, memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
+      start(setup());
+    }
+  });
 
-  jsPsych.data.addProperties({subject_id: subjectID, memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
-
-  function save_data() {
-    var data = jsPsych.data.getData();
-
+  function save_data(data) {
     $.ajax({
       type: 'post',
       cache: false,
-      url: '../common/submit_data_mysql_v4plus.php',
+      url: 'php/write_data.php',
       data: {
         "table": "instructor_mediation_exp_2_study",
-        "json": JSON.stringify(data)
-      },
-      success: function(data2) {
-        console.log(data2);
+        "new_data": JSON.stringify([data])
+      }
+    });
+  }
+  function save_interaction_data(data) {
+    data.subject_id = subjectID;
+    $.ajax({
+      type: 'post',
+      cache: false,
+      url: 'php/write_data.php',
+      data: {
+        "table": "instructor_mediation_exp_2_study_interactions",
+        "new_data": JSON.stringify([data])
       }
     });
   }
@@ -244,39 +250,24 @@
       center_vertical: true
     });
 
-
-    timeline.push({
-      type: 'survey-text',
-      questions: ['How old are you? (e.g., 18, 19, 20)', 'What is your gender?', 'Including this semester, how many semesters of college have you completed? (e.g., 1, 2, 3)']
-    });
-
-    timeline.push({
-      type: 'call-function',
-      func: save_data,
-      timing_post_trial: 0
-    });
-
-    timeline.push({
-      type: 'video',
-      autoplay: true,
-      controls: false,
-      width: video_width,
-      height: video_height,
-      sources:[instructor_videos[5]],
-      timing_post_trial: 0,
-      center_vertical: true
-    });
-
     return timeline;
   }
 
-  jsPsych.init({
-    display_element: $('#jspsych-target'),
-    timeline: timeline,
-    on_finish: function() {
-      //jsPsych.data.displayData();
-    }
-  });
+  function start(timeline){
+    jsPsych.init({
+      display_element: $('#jspsych-target'),
+      timeline: timeline,
+      on_finish: function(){
+        window.location = 'https://prolificacademic.co.uk/submissions/578e24754a84da00014c4b59/complete?cc=Q8HGHFVI';
+      },
+      on_data_update: function(data){
+        save_data(data);
+      },
+      on_interaction_data_update: function(data){
+        save_interaction_data(data);
+      }
+    });
+  }
 </script>
 
 </html>

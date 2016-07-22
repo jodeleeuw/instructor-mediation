@@ -21,4 +21,4 @@ var sis_string =
 "<p>For questions about your rights as a research participant or to discuss problems, complaints or concerns about a research study, or to obtain information, or offer input, contact the IU Human Subjects Office at (812) 856-4242 or (800) 696-2949.</p>"+
 "<h3>VOLUNTARY NATURE OF STUDY</h3>"+
 "<p>Taking part in this study is voluntary.  You may choose not to take part or may leave the study at any time.  Leaving the study will not result in any penalty or loss of benefits to which you are entitled.  Your decision whether or not to participate in this study will not affect your current or future relations with Indiana University.</p>"+
-"<p>Form date: February 24, 2016</p>";
+"<p>Form date: February 24, 2016</p>"+
