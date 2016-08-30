@@ -71,30 +71,27 @@
 var random_order = jsPsych.randomization.shuffle(word_pairs);
 
 // condition assignment
-// get prolific ID
-var subjectID = jsPsych.data.getURLVariable('prolific_pid');
-jsPsych.data.addProperties({subject_id: subjectID});
+var subjectID = prompt('Please enter the subject ID');
+var condition = subjectID % 4;
+var enthusiasm_condition;
+var memory_condition;
+if(condition == 0){
+  enthusiasm_condition = 'enthused';
+  memory_condition = 'massed';
+} else if(condition == 1) {
+  enthusiasm_condition = 'neutral';
+  memory_condition = 'massed';
+} else if(condition == 2) {
+  enthusiasm_condition = 'enthused';
+  memory_condition = 'spaced';
+} else if(condition == 3) {
+  enthusiasm_condition = 'neutral';
+  memory_condition = 'spaced';
+}
 
-var enthusiasm_condition, memory_condition;
+setup();
 
-
-// assign condition
-// script sends ID to server, assigns condition, records in database, and returns assignment
-$.ajax({
-  type: 'post',
-  cache: false,
-  url: 'php/recover_subject.php',
-  data: {
-    "prolific_pid": subjectID
-  },
-  success: function(datajson) {
-    var result = JSON.parse(datajson)
-    memory_condition = result.memory_condition;
-    enthusiasm_condition = result.enthusiasm_condition;
-    jsPsych.data.addProperties({memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
-    setup();
-  }
-});
+jsPsych.data.addProperties({subject_id: subjectID, memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
 
 function setup() {
   var test_trials = [];
@@ -117,6 +114,13 @@ function setup() {
   }
 
   var timeline = [];
+
+  timeline.push({
+    type: 'single-stim',
+    choices: ['enter'],
+    stimulus: '<div style="position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center"><p class="center-content">Press enter to begin.</p></div>',
+    is_html: true
+  });
 
   timeline.push({
     type: 'video',
@@ -311,16 +315,13 @@ function setup() {
       str +="</table>";
       return str;
     },
-    choices: ['enter'],
+    choices: ['`'],
     is_html: true
   });
 
   jsPsych.init({
     display_element: $('#jspsych-target'),
     timeline: timeline,
-    on_finish: function(){
-      window.location = 'https://prolificacademic.co.uk/submissions/578e29ef4d107800016dbfbf/complete?cc=C7VTVB5S';
-    },
     on_data_update: function(data){
       console.log(JSON.stringify(data));
       save_data(data);
