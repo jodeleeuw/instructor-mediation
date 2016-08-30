@@ -280,10 +280,10 @@ function save_data() {
   $.ajax({
     type: 'post',
     cache: false,
-    url: '../common/submit_data_mysql_v4plus.php',
+    url: 'php/write_data.php',
     data: {
       "table": "instructor_mediation_exp_1_test",
-      "json": JSON.stringify(data)
+      "new_data": JSON.stringify(data)
     },
     success: function(data2) {
       console.log(data2);
