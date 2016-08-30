@@ -33,28 +33,29 @@
   // data tracking
   var completed_cards = 0;
 
-  // get prolific ID
-  var subjectID = jsPsych.data.getURLVariable('prolific_pid');
-  var memory_condition;
+  // condition assignment
+  var subjectID = prompt('Please enter the subject ID');
+  var condition = subjectID % 4;
   var enthusiasm_condition;
+  var memory_condition;
+  if(condition == 0){
+    enthusiasm_condition = 'enthused';
+    memory_condition = 'massed';
+  } else if(condition == 1) {
+    enthusiasm_condition = 'neutral';
+    memory_condition = 'massed';
+  } else if(condition == 2) {
+    enthusiasm_condition = 'enthused';
+    memory_condition = 'spaced';
+  } else if(condition == 3) {
+    enthusiasm_condition = 'neutral';
+    memory_condition = 'spaced';
+  }
 
-  // assign condition
-  // script sends ID to server, assigns condition, records in database, and returns assignment
-  $.ajax({
-    type: 'post',
-    cache: false,
-    url: 'php/add_new_subject.php',
-    data: {
-      "prolific_pid": subjectID
-    },
-    success: function(datajson) {
-      var result = JSON.parse(datajson)
-      memory_condition = result.memory_condition;
-      enthusiasm_condition = result.enthusiasm_condition;
-      jsPsych.data.addProperties({subject_id: subjectID, memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
-      start(setup());
-    }
-  });
+  jsPsych.data.addProperties({subject_id: subjectID, memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
+
+  var timeline = setup();
+  start(timeline);
 
   function save_data(data) {
     $.ajax({
@@ -250,6 +251,11 @@
       center_vertical: true
     });
 
+    timeline.push({
+      type: 'survey-text',
+      questions: ['How old are you? (e.g., 18, 19, 20)', 'What is your gender?', 'Including this semester, how many semesters of college have you completed? (e.g., 1, 2, 3)']
+    });
+
     return timeline;
   }
 
@@ -257,9 +263,6 @@
     jsPsych.init({
       display_element: $('#jspsych-target'),
       timeline: timeline,
-      on_finish: function(){
-        window.location = 'https://prolificacademic.co.uk/submissions/578e24754a84da00014c4b59/complete?cc=Q8HGHFVI';
-      },
       on_data_update: function(data){
         save_data(data);
       },

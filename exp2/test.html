@@ -3,16 +3,16 @@
 <head>
   <title>Experiment</title>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
-  <script src="jspsych-5.0.3/jspsych.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-call-function.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-survey-text.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-survey-likert.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-survey-multi-choice.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-single-stim.js"></script>
-  <script src="jspsych-5.0.3/plugins/jspsych-button-response.js"></script>
+  <script src="jspsych-6.0-pre/jspsych.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-call-function.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-survey-text.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-survey-likert.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-survey-multi-choice.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-single-stim.js"></script>
+  <script src="jspsych-6.0-pre/plugins/jspsych-button-response.js"></script>
   <script src="jspsych-video.js"></script>
   <script src="word-info.js"></script>
-  <link href="jspsych-5.0.3/css/jspsych.css" rel="stylesheet"></link>
+  <link href="jspsych-6.0-pre/css/jspsych.css" rel="stylesheet"></link>
   <style>
 
   .jspsych-survey-text-question p {
@@ -67,282 +67,294 @@
 </body>
 <script>
 
-// parameters
-var pay_per_question = 0.25;
-
+// random test order
 var random_order = jsPsych.randomization.shuffle(word_pairs);
 
 // condition assignment
-var subjectID = prompt('Please enter the subject ID');
-var condition = subjectID % 4;
-var enthusiasm_condition;
-var memory_condition;
-if(condition == 0){
-  enthusiasm_condition = 'enthused';
-  memory_condition = 'massed';
-} else if(condition == 1) {
-  enthusiasm_condition = 'neutral';
-  memory_condition = 'massed';
-} else if(condition == 2) {
-  enthusiasm_condition = 'enthused';
-  memory_condition = 'spaced';
-} else if(condition == 3) {
-  enthusiasm_condition = 'neutral';
-  memory_condition = 'spaced';
-}
+// get prolific ID
+var subjectID = jsPsych.data.getURLVariable('prolific_pid');
+jsPsych.data.addProperties({subject_id: subjectID});
 
-jsPsych.data.addProperties({subject_id: subjectID, memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
+var enthusiasm_condition, memory_condition;
 
-var test_trials = [];
-for(var i=0;i<random_order.length; i++){
-  test_trials.push({
-    questions: [random_order[i][1]],
-    data: {
-      test_question: true,
-      english: random_order[i][0],
-      indonesian: random_order[i][1]
+
+// assign condition
+// script sends ID to server, assigns condition, records in database, and returns assignment
+$.ajax({
+  type: 'post',
+  cache: false,
+  url: 'php/recover_subject.php',
+  data: {
+    "prolific_pid": subjectID
+  },
+  success: function(datajson) {
+    var result = JSON.parse(datajson)
+    memory_condition = result.memory_condition;
+    enthusiasm_condition = result.enthusiasm_condition;
+    jsPsych.data.addProperties({memory_condition: memory_condition, enthusiasm_condition: enthusiasm_condition});
+    setup();
+  }
+});
+
+function setup() {
+  var test_trials = [];
+  for(var i=0;i<random_order.length; i++){
+    test_trials.push({
+      questions: [random_order[i][1]],
+      data: {
+        test_question: true,
+        english: random_order[i][0],
+        indonesian: random_order[i][1]
+      }
+    });
+  }
+
+  // video assignment
+  if(enthusiasm_condition == 'enthused'){
+    var welcome_video = 'video/ENRICHED_06_Testing.mp4';
+  } else {
+    var welcome_video = 'video/NEUTRAL_06_Testing.mp4';
+  }
+
+  var timeline = [];
+
+  timeline.push({
+    type: 'video',
+    autoplay: true,
+    controls: false,
+    width: 640,
+    height: 360,
+    sources: [welcome_video],
+    timing_post_trial: 0,
+    center_vertical: true
+  });
+
+  timeline.push({
+    type: 'single-stim',
+    choices: ['enter'],
+    stimulus: '<div style="position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center"><p class="center-content">Press the enter key to continue.</p></div>',
+    is_html: true
+  });
+
+  timeline.push({
+    type: 'survey-text',
+    columns: 15,
+    on_finish: function(data){
+      var response = JSON.parse(data.responses).Q0;
+      var correct = response.toLowerCase().trim() == data.english.toLowerCase();
+      jsPsych.data.addDataToLastTrial({correct: correct});
+    },
+    timeline: test_trials,
+    timing_post_trial: 200
+  });
+
+  // this next block resets the special styling for the word questions
+  timeline.push({
+    type: 'call-function',
+    func: function(){
+      $('<style>'+
+      'textarea { font-size: 18px; margin: 1em 0em; text-align: left; border: 1px solid black;}'+
+      '.jspsych-survey-text-question p {font-size: 18px;padding-bottom: 0.2em;text-align: left;}'+
+      '</style>').appendTo('head');
+    },
+    timing_post_trial: 0,
+  });
+
+  timeline.push({
+    type: 'single-stim',
+    stimulus: '<p>We have a few quick questions to ask you about your impressions of the experiment. Press enter to continue.</p>',
+    is_html: true,
+    choices: ['enter']
+  });
+
+  var study_question = "";
+  var other_cond_question = "";
+  if(memory_condition == 'spaced'){
+    study_question = '<p>One can study material in several different ways. As you may have noticed, each of the four chances you '+
+      'got to study a word were separated by many other words.</p>';
+    other_cond_question = 'How many words do you think you would have learned if the four chances you got to study each word appeared '+
+      'in a row? For example, if cards 21, 22, 23, and 24 were all the same word.'
+  } else if(memory_condition == 'massed'){
+    study_question = '<p>One can study material in several different ways. As you may have noticed, each of the four chances you '+
+      'got to study a word appeared in a row.</p>'
+    other_cond_question = 'How many words do you think you would have learned if the four chances you got to study each word were '+
+      'spread out throughout the study phase? For example, if cards 21, 57, 93, and 126 were all the same word.'
+  }
+
+  timeline.push({
+    type: 'survey-text',
+    preamble: study_question,
+    questions: ['How many words do you think you learned? (There were 36 total words).', other_cond_question]
+  });
+
+  timeline.push({
+    type: 'survey-likert',
+    preamble: '<p>We are interested in your impressions of Ben, who explained the experiment to you in the video clips.</p>',
+    questions: [
+      'Ben was enthusiastic about this activity.',
+      'Ben was dynamic and energetic in conducting this activity.',
+      'Ben\'s style of presentation held my interest.',
+      'I have strong memories of the videos of Ben.'
+    ],
+    labels: [
+      ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
+      ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
+      ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
+      ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree']
+    ]
+  });
+
+  timeline.push({
+    type: 'survey-likert',
+    questions: [
+      'I felt motivated to do well in this experiment.'
+    ],
+    labels: [
+      ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
+    ]
+  });
+
+
+  timeline.push({
+    type: 'survey-multi-choice',
+    questions: [
+      'Did you practice any of the words that you studied in the first session after you finished the first session?'
+    ],
+    options: [
+      ['Yes', 'No']
+    ],
+    horizontal: true
+  });
+
+  timeline.push({
+    conditional_function: function(){
+      var d = jsPsych.data.getLastTrialData();
+      var r = JSON.parse(d.responses).Q0 == 'Yes';
+      return r;
+    },
+    timeline: [{
+      type: 'survey-text',
+      rows: [10],
+      columns: [80],
+      questions: ['Please describe what kind of practice you did in between your last session and this session.']
+    }]
+  });
+
+  timeline.push({
+    type: 'survey-multi-choice',
+    questions: [
+      'Are you a native English speaker?',
+      'Are you fluent in Indonesian?',
+      'How many of the Indonesian words did you know before the first session of this experiment? Do not include words that you guessed correctly because they look or sound similar to the English words.',
+    ],
+    options: [
+      ['Yes', 'No'],
+      ['Yes', 'No'],
+      ['0', '1-5', 'More than 5']
+    ],
+    horizontal: true
+  });
+
+  timeline.push({
+    conditional_function: function(){
+      var d = jsPsych.data.getLastTrialData();
+      var r = JSON.parse(d.responses).Q0 == 'No';
+      return r;
+    },
+    timeline: [{
+      type: 'survey-text',
+      questions: ['At what age did you begin learning English?']
+    }]
+  });
+
+  timeline.push({
+    type: 'single-stim',
+    stimulus: '<p>You are almost done! Here is some information about what we are studying. Then we will tell you how you did.</p>'+
+    '<p>In this study you started by watching an instructor explain what you were going to do and how to do it. Then you studied a '+
+    'list of Indonesian words and their meaning in English. You were asked to learn these new words and were tested on your knowledge.</p>'+
+    '<p>We are interested in how the characteristics of the instructor influence how well people learn. Half the participants saw an actor '+
+    'that instructed them using one teaching style (enthusiastic and excited), while the other half of participants saw the same actor '+
+    'instructing them in a different style (calm and neutral). We are interested in how these differences in instructor characteristics '+
+    'influence what you learned. To do this, we compare how much people that saw each type of instructor learned and remembered.</p>'+
+    '<p>We also manipulated the kind of studying participants did. Research in the science of learning suggests that people remember fewer '+
+    'words if they try to practice one word at a time over and over again instead of spacing their practice out. Half of the participants '+
+    'in this study studied the words in a spaced order, and half studied in a clumped order. We are interested in how the instruction style '+
+    'of the teacher changes the effectiveness of these two different ways of studying. One possibility, for example, is that having an '+
+    'engaging instructor motivates people to try harder and do well regardless of which kind of studying they did.</p>'+
+    '<p>In sum, this experiment will help us understand how the characteristics of the instructor can influence learning outcomes and '+
+    'how these interact with students\' own studying techniques.</p>'+
+    '<p>Go ahead and press enter to see how you did!</p>',
+    is_html: true,
+    choices: ['enter']
+  });
+
+  timeline.push({
+    type: 'single-stim',
+    stimulus: function(){
+      var correct = 0;
+      var total = 0;
+      var d = jsPsych.data.getData();
+      for(var i in d){
+        if(d[i].test_question){
+          total++;
+          if(d[i].correct) { correct++; }
+        }
+      }
+      var str = "<p>You remembered "+correct+" words out of "+total+".</p><p>Press enter to end the experiment and return to Prolific.</p>";
+      str += "<table><tr><th>Indonesian</th><th>English</th><th>Your answer</th></tr>";
+      for(var i in d){
+        if(d[i].test_question){
+          var ans = JSON.parse(d[i].responses).Q0.trim();
+          str+= "<tr class='answer-"+d[i].correct+"'><td>"+d[i].indonesian+"</td><td>"+d[i].english+"</td><td>"+ans+"</td></tr>";
+        }
+      }
+      str +="</table>";
+      return str;
+    },
+    choices: ['enter'],
+    is_html: true
+  });
+
+  jsPsych.init({
+    display_element: $('#jspsych-target'),
+    timeline: timeline,
+    on_finish: function(){
+      window.location = 'https://prolificacademic.co.uk/submissions/578e29ef4d107800016dbfbf/complete?cc=C7VTVB5S';
+    },
+    on_data_update: function(data){
+      console.log(JSON.stringify(data));
+      save_data(data);
+    },
+    on_interaction_data_update: function(data){
+      save_interaction_data(data);
     }
   });
 }
 
-// video assignment
-if(enthusiasm_condition == 'enthused'){
-  var welcome_video = 'video/ENRICHED_07_Testing.mp4';
-} else {
-  var welcome_video = 'video/NEUTRAL_07_Testing.mp4';
-}
-
-var timeline = [];
-
-timeline.push({
-  type: 'button-response',
-  choices: ['Start']
-});
-
-timeline.push({
-  type: 'video',
-  autoplay: true,
-  controls: false,
-  width: 640,
-  height: 360,
-  sources: [welcome_video],
-  timing_post_trial: 0,
-  center_vertical: true
-});
-
-timeline.push({
-  type: 'single-stim',
-  choices: ['enter'],
-  stimulus: '<div style="position: absolute; top: 0; left: 0; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center"><p class="center-content">Press the enter key to continue.</p></div>',
-  is_html: true
-});
-
-timeline.push({
-  type: 'survey-text',
-  columns: 15,
-  on_finish: function(data){
-    var response = JSON.parse(data.responses).Q0;
-    var correct = response.toLowerCase().trim() == data.english.toLowerCase();
-    jsPsych.data.addDataToLastTrial({correct: correct});
-  },
-  timeline: test_trials,
-  timing_post_trial: 200
-});
-
-// this next block resets the special styling for the word questions
-timeline.push({
-  type: 'call-function',
-  func: function(){
-    $('<style>'+
-    'textarea { font-size: 18px; margin: 1em 0em; text-align: left; border: 1px solid black;}'+
-    '.jspsych-survey-text-question p {font-size: 18px;padding-bottom: 0.2em;text-align: left;}'+
-    '</style>').appendTo('head');
-  },
-  timing_post_trial: 0,
-});
-
-timeline.push({
-  type: 'single-stim',
-  stimulus: '<p>We have a few quick questions to ask you about your impressions of the experiment. Press enter to continue.</p>',
-  is_html: true,
-  choices: ['enter']
-});
-
-var study_question = "";
-var other_cond_question = "";
-if(memory_condition == 'spaced'){
-  study_question = '<p>One can study material in several different ways. As you may have noticed, each of the four chances you '+
-    'got to study a word were separated by many other words.</p>';
-  other_cond_question = 'How many words do you think you would have learned if the four chances you got to study each word appeared '+
-    'in a row? For example, if cards 21, 22, 23, and 24 were all the same word.'
-} else if(memory_condition == 'massed'){
-  study_question = '<p>One can study material in several different ways. As you may have noticed, each of the four chances you '+
-    'got to study a word appeared in a row.</p>'
-  other_cond_question = 'How many words do you think you would have learned if the four chances you got to study each word were '+
-    'spread out throughout the study phase? For example, if cards 21, 57, 93, and 126 were all the same word.'
-}
-
-timeline.push({
-  type: 'survey-text',
-  preamble: study_question,
-  questions: ['How many words do you think you learned? (There were 36 total words).', other_cond_question]
-});
-
-timeline.push({
-  type: 'survey-likert',
-  preamble: '<p>We are interested in your impressions of Ashley, who explained the experiment to you in the video clips.</p>',
-  questions: [
-    'Ashley was enthusiastic about this activity.',
-    'Ashley was dynamic and energetic in conducting this activity.',
-    'Ashley\'s style of presentation held my interest.',
-    'I have strong memories of the videos of Ashley.'
-  ],
-  labels: [
-    ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
-    ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
-    ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
-    ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree']
-  ]
-});
-
-timeline.push({
-  type: 'survey-likert',
-  questions: [
-    'I felt motivated to do well in this experiment.'
-  ],
-  labels: [
-    ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
-  ]
-});
-
-
-timeline.push({
-  type: 'survey-multi-choice',
-  questions: [
-    'Did you practice any of the words that you studied in the first session after you left the laboratory?'
-  ],
-  options: [
-    ['Yes', 'No']
-  ],
-  horizontal: true
-});
-
-timeline.push({
-  conditional_function: function(){
-    var d = jsPsych.data.getLastTrialData();
-    var r = JSON.parse(d.responses).Q0 == 'Yes';
-    return r;
-  },
-  timeline: [{
-    type: 'survey-text',
-    rows: [10],
-    columns: [80],
-    questions: ['Please describe what kind of practice you did in between your last session and this session.']
-  }]
-});
-
-timeline.push({
-  type: 'survey-multi-choice',
-  questions: [
-    'Are you a native English speaker?',
-    'Are you fluent in Indonesian?',
-    'How many of the Indonesian words did you know before the first session of this experiment? Do not include words that you guessed correctly because they look or sound similar to the English words.',
-  ],
-  options: [
-    ['Yes', 'No'],
-    ['Yes', 'No'],
-    ['0', '1-5', 'More than 5']
-  ],
-  horizontal: true
-});
-
-timeline.push({
-  conditional_function: function(){
-    var d = jsPsych.data.getLastTrialData();
-    var r = JSON.parse(d.responses).Q0 == 'No';
-    return r;
-  },
-  timeline: [{
-    type: 'survey-text',
-    questions: ['At what age did you begin learning English?']
-  }]
-});
-
-timeline.push({
-  type: 'call-function',
-  func: save_data,
-  timing_post_trial: 0
-});
-
-function save_data() {
-  var data = jsPsych.data.getData();
-
+function save_data(data) {
   $.ajax({
     type: 'post',
     cache: false,
-    url: '../common/submit_data_mysql_v4plus.php',
+    url: 'php/write_data.php',
     data: {
-      "table": "instructor_mediation_exp_1_test",
-      "json": JSON.stringify(data)
-    },
-    success: function(data2) {
-      console.log(data2);
+      "table": "instructor_mediation_exp_2_test",
+      "new_data": JSON.stringify([data])
     }
   });
 }
 
-timeline.push({
-  type: 'single-stim',
-  stimulus: '<p>You are almost done! Here is some information about what we are studying. Then we will tell you how you did.</p>'+
-  '<p>In this study you started by watching an instructor explain what you were going to do and how to do it. Then you studied a '+
-  'list of Indonesian words and their meaning in English. You were asked to learn these new words and were tested on your knowledge.</p>'+
-  '<p>We are interested in how the characteristics of the instructor influence how well people learn. Half the participants saw an actor '+
-  'that instructed them using one teaching style (enthusiastic and excited), while the other half of participants saw the same actor '+
-  'instructing them in a different style (calm and neutral). We are interested in how these differences in instructor characteristics '+
-  'influence what you learned. To do this, we compare how much people that saw each type of instructor learned and remembered.</p>'+
-  '<p>We also manipulated the kind of studying participants did. Research in the science of learning suggests that people remember fewer '+
-  'words if they try to practice one word at a time over and over again instead of spacing their practice out. Half of the participants '+
-  'in this study studied the words in a spaced order, and half studied in a clumped order. We are interested in how the instruction style '+
-  'of the teacher changes the effectiveness of these two different ways of studying. One possibility, for example, is that having an '+
-  'engaging instructor motivates people to try harder and do well regardless of which kind of studying they did.</p>'+
-  '<p>In sum, this experiment will help us understand how the characteristics of the instructor can influence learning outcomes and '+
-  'how these interact with students own studying techniques.</p>'+
-  '<p>Go ahead and press enter to see how you did!</p>',
-  is_html: true,
-  choices: ['enter']
-});
-
-timeline.push({
-  type: 'single-stim',
-  stimulus: function(){
-    var correct = 0;
-    var total = 0;
-    var d = jsPsych.data.getData();
-    for(var i in d){
-      if(d[i].test_question){
-        total++;
-        if(d[i].correct) { correct++; }
-      }
+function save_interaction_data(data) {
+  data.subject_id = subjectID;
+  $.ajax({
+    type: 'post',
+    cache: false,
+    url: 'php/write_data.php',
+    data: {
+      "table": "instructor_mediation_exp_2_test_interactions",
+      "new_data": JSON.stringify([data])
     }
-    var payment = correct * pay_per_question;
-    var str = "<p>All done! Please let the research assistant know you have completed the experiment.</p><p>You remembered "+correct+" words out of "+total+". You earned $"+payment.toFixed(2)+".</p>";
-    str += "<table><tr><th>Indonesian</th><th>English</th><th>Your answer</th></tr>";
-    for(var i in d){
-      if(d[i].test_question){
-        var ans = JSON.parse(d[i].responses).Q0.trim();
-        str+= "<tr class='answer-"+d[i].correct+"'><td>"+d[i].indonesian+"</td><td>"+d[i].english+"</td><td>"+ans+"</td></tr>";
-      }
-    }
-    str +="</table>";
-    return str;
-  },
-  choices: ['none'],
-  is_html: true
-});
+  });
+}
 
-jsPsych.init({
-  display_element: $('#jspsych-target'),
-  timeline: timeline
-})
 </script>
 </html>
